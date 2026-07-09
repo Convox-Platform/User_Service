@@ -12,7 +12,7 @@
 
 ## Окружение, секреты и локальные настройки
 .env
-.env.*
+*.sln
 *.secrets.yaml
 secrets.dev.yaml
 values.dev.yaml
