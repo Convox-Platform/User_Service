@@ -1,30 +1,34 @@
 ﻿using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using System.Data.Common;
 
 namespace User_Service.Migration
 {
     public class DbCreate
     {
-        public static void CreateDatabase(string connectionString)
+        public static void CreateDatabase(string connectionString,string sqlSecretPassword)
         {
-            string masterConnectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;Initial Catalog=master;Integrated Security=True;";
+            string masterConnectionString = $"Host=localhost;Port=5432;Database=postgres;Username=postgres;Password={sqlSecretPassword};";
 
-            using (var connection = new SqlConnection(masterConnectionString))
+            using (var connection = new NpgsqlConnection(masterConnectionString))
             {
-                string checkDbSql = "SELECT COUNT(*) FROM sys.databases WHERE name = @DbName";
+                string checkDbSql = "SELECT COUNT(*) FROM pg_database WHERE datname = @DbName";
+                var DbName = "User_Service";
 
-                bool dbExists = connection.ExecuteScalar<int>(checkDbSql, new { DbName = "User_ServiceDB" }) > 0;
+                bool dbExists = connection.ExecuteScalar<int>(checkDbSql, new { DbName = DbName }) > 0;
 
                 if (!dbExists)
                 {
-                    connection.Execute("CREATE DATABASE User_ServiceDB;");
+                    connection.Execute($"CREATE DATABASE \"{DbName}\"");
                 }
             }
 
-            using (var connection = new SqlConnection(connectionString))
+            using (var connection = new NpgsqlConnection(connectionString))
             {
-                string checkTableSql = "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@TableName) AND type = 'U'";
+                string checkTableSql = @"
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = LOWER(@TableName)";
 
                 bool tableExists = connection.ExecuteScalar<int>(checkTableSql, new { TableName = "UserProfiles" }) > 0;
 
@@ -34,14 +38,14 @@ namespace User_Service.Migration
                 }
 
                 string sql = @"CREATE TABLE UserProfiles (
-                Id BIGINT PRIMARY KEY,
-                Username NVARCHAR(100) NOT NULL,
-                DisplayName NVARCHAR(100) NOT NULL,
-                Description NVARCHAR(MAX) NULL,
-                Img NVARCHAR(MAX) NULL,
-                BirthDate DATE NULL,
-                Status NVARCHAR(100) NULL,
-                StatusUpdatedAt DATETIME2 NULL)";
+            Id BIGINT PRIMARY KEY,
+            Username VARCHAR(100) NOT NULL,
+            DisplayName VARCHAR(100) NOT NULL,
+            Description TEXT NULL,
+            Img TEXT NULL,
+            BirthDate DATE NULL,
+            Status VARCHAR(100) NULL,
+            StatusUpdatedAt TIMESTAMPTZ NULL)";
 
                 connection.Execute(sql);
 

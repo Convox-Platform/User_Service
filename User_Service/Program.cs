@@ -1,6 +1,6 @@
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using System.Data.Common;
 using System.Text;
 using User_Service.Migration;
@@ -17,9 +17,10 @@ namespace User_Service
             var conStr = Environment.GetEnvironmentVariable("CONNECTION_STRING")    ?? throw new ArgumentNullException("CONNECTION_STRING not found");
             var origin = Environment.GetEnvironmentVariable("ORIGIN")               ?? throw new ArgumentNullException("ORIGIN not found");
             var isReflectionEnabled = Environment.GetEnvironmentVariable("GRPC_REFLECTION_ENABLED") ?? throw new ArgumentNullException("REFLECTION_ENABLED not found");
-            var secret = Environment.GetEnvironmentVariable("JWT_SECRET")           ?? throw new ArgumentNullException("JWT_SECRET not found"); ;
+            var secret = Environment.GetEnvironmentVariable("JWT_SECRET")           ?? throw new ArgumentNullException("JWT_SECRET not found"); 
+            var sqlSecretPassword = Environment.GetEnvironmentVariable("SQL_SECRET_PASSWORD") ?? throw new ArgumentNullException("SQL_SECRET_PASSWORD not found");
 
-            DbCreate.CreateDatabase(conStr);
+            DbCreate.CreateDatabase(conStr,sqlSecretPassword);
 
 
             var builder = WebApplication.CreateBuilder(args);
@@ -47,7 +48,7 @@ namespace User_Service
                 };
             });
 
-            builder.Services.AddTransient<DbConnection>(sp => new SqlConnection(conStr));
+            builder.Services.AddTransient<DbConnection>(sp => new NpgsqlConnection(conStr));
 
             builder.Services.AddTransient<List<UserPresence>>(sp => new List<UserPresence>());
 
@@ -73,11 +74,8 @@ namespace User_Service
 
             app.UseGrpcWeb();
 
-            // Configure the HTTP request pipeline.
-            app.MapGrpcService<GreeterService>();
             app.MapGrpcService<UserGrpcService>().EnableGrpcWeb();
             
-            app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
 
             app.Run();
         }

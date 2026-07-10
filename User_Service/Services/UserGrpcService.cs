@@ -98,7 +98,12 @@ public class UserGrpcService: UserService.UserServiceBase
     {
         var limit = request.Limit <= 0 ? 20 : request.Limit;
 
-        var sql = "SELECT TOP (@limit) *\r\nFROM UserProfiles\r\nWHERE LOWER(Username) LIKE '%' + LOWER(@query) + '%'\r\n   OR LOWER(DisplayName) LIKE '%' + LOWER(@query) + '%';";
+        var sql = @"
+        SELECT * 
+        FROM UserProfiles
+        WHERE Username ILIKE CONCAT('%', @query, '%')
+           OR DisplayName ILIKE CONCAT('%', @query, '%')
+        LIMIT @limit;"; 
 
         var users = await _db.QueryAsync<UserProfile>(sql, new { query = request.Query, limit = limit });
 
