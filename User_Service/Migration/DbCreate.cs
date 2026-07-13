@@ -8,7 +8,12 @@ namespace User_Service.Migration
     {
         public static void CreateDatabase(string connectionString,string sqlSecretPassword)
         {
-            string masterConnectionString = $"Host=localhost;Port=5432;Database=postgres;Username=postgres;Password={sqlSecretPassword};";
+            var masterBuilder = new NpgsqlConnectionStringBuilder(connectionString)
+            {
+                Database = "postgres",
+                Password = sqlSecretPassword
+            };
+            string masterConnectionString = masterBuilder.ConnectionString;
 
             using (var connection = new NpgsqlConnection(masterConnectionString))
             {
