@@ -11,10 +11,12 @@ namespace User_Service.Services;
 public class UserGrpcService: UserService.UserServiceBase
 {
     private readonly DbConnection _db;
+    private readonly RabbitMqPublisher _publisher;
 
-    public UserGrpcService(DbConnection db)
+    public UserGrpcService(DbConnection db, RabbitMqPublisher publisher)
     {
         _db = db;
+        _publisher = publisher;
     }
 
     public override async Task<UserProfileResponse> CreateUserProfile(
@@ -37,7 +39,8 @@ public class UserGrpcService: UserService.UserServiceBase
 
         await _db.ExecuteAsync(sql, profile);
 
-        
+        var message = new UserProfileRabbitMqEvent(Id: profile.Id, Username: profile.Username, DisplayName: profile.DisplayName, Img: profile.Img);
+        await _publisher.PublisAsync(queueName:"user.profile.created", message,context.CancellationToken);
 
         return ToResponse(profile);
     }
@@ -88,6 +91,9 @@ public class UserGrpcService: UserService.UserServiceBase
             "WHERE Id = @Id";
 
         await _db.ExecuteAsync(updateSql, profile);
+
+        var message = new UserProfileRabbitMqEvent(Id: profile.Id, Username: profile.Username, DisplayName: profile.DisplayName, Img: profile.Img);
+        await _publisher.PublisAsync(queueName: "user.profile.updated", message, context.CancellationToken);
 
         return ToResponse(profile);
     }

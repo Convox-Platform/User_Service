@@ -20,6 +20,10 @@ namespace User_Service
             var secret = Environment.GetEnvironmentVariable("JWT_SECRET")           ?? throw new ArgumentNullException("JWT_SECRET not found"); 
             var sqlSecretPassword = Environment.GetEnvironmentVariable("SQL_SECRET_PASSWORD") ?? throw new ArgumentNullException("SQL_SECRET_PASSWORD not found");
 
+            var rabbitMqHostName = Environment.GetEnvironmentVariable("RABBITMQ_HOSTNAME");
+            var rabbitMqUserName = Environment.GetEnvironmentVariable("RABBITMQ_USERNAME");
+            var rabbitMqPassword = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD");
+
             DbCreate.CreateDatabase(conStr,sqlSecretPassword);
 
 
@@ -48,9 +52,14 @@ namespace User_Service
                 };
             });
 
+            builder.Services.AddSingleton<RabbitMqPublisher>();
             builder.Services.AddTransient<DbConnection>(sp => new NpgsqlConnection(conStr));
 
             builder.Services.AddTransient<List<UserPresence>>(sp => new List<UserPresence>());
+
+            builder.Services.AddKeyedSingleton("RabbitMqHostName", rabbitMqHostName??"localhost");
+            builder.Services.AddKeyedSingleton("RabbitMqUserName", rabbitMqUserName??"guest");
+            builder.Services.AddKeyedSingleton("RabbitMqPassword", rabbitMqPassword ?? "guest");
 
             builder.Services.AddHttpClient();
             if (isReflectionEnabled != null && isReflectionEnabled == "true")
