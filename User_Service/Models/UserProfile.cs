@@ -8,7 +8,7 @@ public class UserProfile
     public string DisplayName { get; set; } = "";
     public string? Description { get; set; }
     public string? Img { get; set; }
-    public DateTime? BirthDate { get; set; }
+    public DateOnly? BirthDate { get; set; }
 
     public string? Status { get; set; }
     public DateTime? StatusUpdatedAt { get; set; }

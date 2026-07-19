@@ -1,6 +1,8 @@
 using DotNetEnv;
+using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Npgsql;
+using System.Data;
 using System.Data.Common;
 using System.Text;
 using User_Service.Migration;
@@ -14,6 +16,8 @@ namespace User_Service
         public static void Main(string[] args)
         {
             Env.Load();
+            SqlMapper.AddTypeMap(typeof(DateOnly), DbType.Date);
+
             var conStr = Environment.GetEnvironmentVariable("CONNECTION_STRING")    ?? throw new ArgumentNullException("CONNECTION_STRING not found");
             var origin = Environment.GetEnvironmentVariable("ORIGIN")               ?? throw new ArgumentNullException("ORIGIN not found");
             var isReflectionEnabled = Environment.GetEnvironmentVariable("GRPC_REFLECTION_ENABLED") ?? throw new ArgumentNullException("REFLECTION_ENABLED not found");

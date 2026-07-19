@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using System.Data.Common;
+using System.Globalization;
 using User_Service.Models;
 
 using Dapper;
@@ -83,8 +84,7 @@ public class UserGrpcService: UserService.UserServiceBase
         profile.Status = request.Status;
         profile.StatusUpdatedAt = DateTime.UtcNow;
 
-        if (DateTime.TryParse(request.BirthDate, out var birthDate))
-            profile.BirthDate = birthDate;
+        profile.BirthDate = ParseBirthDate(request.BirthDate);
 
         var updateSql = "UPDATE UserProfiles SET Username = @Username, DisplayName = @DisplayName, " +
             "Description = @Description, Img = @Img, BirthDate = @BirthDate, Status = @Status, StatusUpdatedAt = @StatusUpdatedAt " +
@@ -131,11 +131,31 @@ public class UserGrpcService: UserService.UserServiceBase
             DisplayName = profile.DisplayName,
             Description = profile.Description ?? "",
             Img = profile.Img ?? "",
-            BirthDate = profile.BirthDate?.ToString("yyyy-MM-dd") ?? "",
+            BirthDate = profile.BirthDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "",
             Status = profile.Status ?? "",
             StatusUpdatedAt = profile.StatusUpdatedAt.HasValue
                 ? new DateTimeOffset(profile.StatusUpdatedAt.Value).ToUnixTimeSeconds()
                 : 0
         };
+    }
+
+    private static DateOnly? ParseBirthDate(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (DateOnly.TryParseExact(
+                value.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var birthDate))
+        {
+            return birthDate;
+        }
+
+        throw new RpcException(new Status(
+            StatusCode.InvalidArgument,
+            "Birth date must use the yyyy-MM-dd format."));
     }
 }
