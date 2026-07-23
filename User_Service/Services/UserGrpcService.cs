@@ -98,6 +98,28 @@ public class UserGrpcService: UserService.UserServiceBase
 
         return ToResponse(profile);
     }
+
+    public override async Task<CheckUsernameAvailabilityResponse> CheckUsernameAvailability(
+        CheckUsernameAvailabilityRequest request,
+        ServerCallContext context)
+    {
+        var username = NormalizeUsername(request.Username);
+        const string sql = @"
+            SELECT NOT EXISTS (
+                SELECT 1
+                FROM UserProfiles
+                WHERE LOWER(Username) = LOWER(@Username)
+            )";
+
+        var available = await _db.QuerySingleAsync<bool>(
+            new CommandDefinition(
+                sql,
+                new { Username = username },
+                cancellationToken: context.CancellationToken));
+
+        return new CheckUsernameAvailabilityResponse { Available = available };
+    }
+
     [Authorize]
     public override async Task<SearchUsersResponse> SearchUsers(
         SearchUsersRequest request,
