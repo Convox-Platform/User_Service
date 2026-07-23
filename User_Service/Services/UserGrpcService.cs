@@ -5,6 +5,7 @@ using User_Service.Models;
 
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
+using Npgsql;
 
 
 namespace User_Service.Services;
@@ -29,7 +30,7 @@ public class UserGrpcService: UserService.UserServiceBase
         var profile = new UserProfile
         {
             Id = request.UserId,
-            Username = request.Username,
+            Username = NormalizeUsername(request.Username),
             DisplayName = request.DisplayName,
             Img = request.Img,
             Status = "new user",
@@ -38,7 +39,7 @@ public class UserGrpcService: UserService.UserServiceBase
 
         string sql = "INSERT INTO UserProfiles (Id, Username, DisplayName, Img, Status, StatusUpdatedAt) VALUES (@Id, @Username, @DisplayName, @Img, @Status, @StatusUpdatedAt)";
 
-        await _db.ExecuteAsync(sql, profile);
+        await SaveWithAvailableUsernameAsync(profile, sql);
 
         var message = new UserProfileRabbitMqEvent(Id: profile.Id, Username: profile.Username, DisplayName: profile.DisplayName, Img: profile.Img);
         await _publisher.PublisAsync(queueName:"user.profile.created", message,context.CancellationToken);
@@ -74,7 +75,7 @@ public class UserGrpcService: UserService.UserServiceBase
             throw new RpcException(new Status(StatusCode.NotFound, "User profile not found."));
 
         if (!string.IsNullOrWhiteSpace(request.Username))
-            profile.Username = request.Username;
+            profile.Username = NormalizeUsername(request.Username);
 
         if (!string.IsNullOrWhiteSpace(request.DisplayName))
             profile.DisplayName = request.DisplayName;
@@ -90,7 +91,7 @@ public class UserGrpcService: UserService.UserServiceBase
             "Description = @Description, Img = @Img, BirthDate = @BirthDate, Status = @Status, StatusUpdatedAt = @StatusUpdatedAt " +
             "WHERE Id = @Id";
 
-        await _db.ExecuteAsync(updateSql, profile);
+        await SaveWithAvailableUsernameAsync(profile, updateSql);
 
         var message = new UserProfileRabbitMqEvent(Id: profile.Id, Username: profile.Username, DisplayName: profile.DisplayName, Img: profile.Img);
         await _publisher.PublisAsync(queueName: "user.profile.updated", message, context.CancellationToken);
@@ -157,5 +158,57 @@ public class UserGrpcService: UserService.UserServiceBase
         throw new RpcException(new Status(
             StatusCode.InvalidArgument,
             "Birth date must use the yyyy-MM-dd format."));
+    }
+
+    private static string NormalizeUsername(string value)
+    {
+        var username = value?.Trim() ?? string.Empty;
+        if (username.Length is < 1 or > 100)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "Username must be between 1 and 100 characters."));
+        }
+
+        return username;
+    }
+
+    private static bool IsUsernameConflict(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.UniqueViolation &&
+        exception.ConstraintName == "ux_userprofiles_username_normalized";
+
+    private async Task SaveWithAvailableUsernameAsync(UserProfile profile, string sql)
+    {
+        var requestedUsername = profile.Username;
+
+        for (var suffix = 0; suffix < 10_000; suffix++)
+        {
+            profile.Username = BuildUsernameCandidate(requestedUsername, suffix);
+
+            try
+            {
+                await _db.ExecuteAsync(sql, profile);
+                return;
+            }
+            catch (PostgresException exception) when (IsUsernameConflict(exception))
+            {
+                // A concurrent request may claim a candidate between attempts.
+            }
+        }
+
+        throw new RpcException(new Status(
+            StatusCode.ResourceExhausted,
+            "Could not allocate an available username."));
+    }
+
+    private static string BuildUsernameCandidate(string requestedUsername, int suffix)
+    {
+        if (suffix == 0)
+        {
+            return requestedUsername;
+        }
+
+        var digits = suffix.ToString(CultureInfo.InvariantCulture);
+        return requestedUsername[..Math.Min(requestedUsername.Length, 100 - digits.Length)] + digits;
     }
 }

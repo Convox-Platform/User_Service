@@ -37,22 +37,41 @@ namespace User_Service.Migration
 
                 bool tableExists = connection.ExecuteScalar<int>(checkTableSql, new { TableName = "UserProfiles" }) > 0;
 
-                if (tableExists)
+                if (!tableExists)
                 {
-                    return;
+                    string sql = @"CREATE TABLE UserProfiles (
+                Id BIGINT PRIMARY KEY,
+                Username VARCHAR(100) NOT NULL,
+                DisplayName VARCHAR(100) NOT NULL,
+                Description TEXT NULL,
+                Img TEXT NULL,
+                BirthDate DATE NULL,
+                Status VARCHAR(100) NULL,
+                StatusUpdatedAt TIMESTAMPTZ NULL)";
+
+                    connection.Execute(sql);
                 }
 
-                string sql = @"CREATE TABLE UserProfiles (
-            Id BIGINT PRIMARY KEY,
-            Username VARCHAR(100) NOT NULL,
-            DisplayName VARCHAR(100) NOT NULL,
-            Description TEXT NULL,
-            Img TEXT NULL,
-            BirthDate DATE NULL,
-            Status VARCHAR(100) NULL,
-            StatusUpdatedAt TIMESTAMPTZ NULL)";
+                connection.Execute(@"
+                    WITH ranked_usernames AS (
+                        SELECT
+                            Id,
+                            Username,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY LOWER(Username)
+                                ORDER BY Id
+                            ) AS username_rank
+                        FROM UserProfiles
+                    )
+                    UPDATE UserProfiles AS profile
+                    SET Username = LEFT(ranked.Username, 80) || '-' || ranked.Id::text
+                    FROM ranked_usernames AS ranked
+                    WHERE profile.Id = ranked.Id
+                      AND ranked.username_rank > 1");
 
-                connection.Execute(sql);
+                connection.Execute(@"
+                    CREATE UNIQUE INDEX IF NOT EXISTS ux_userprofiles_username_normalized
+                    ON UserProfiles (LOWER(Username))");
 
             }
         }
